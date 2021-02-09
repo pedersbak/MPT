@@ -18,7 +18,7 @@ class PortfolioOptimizer():
         self.iterations = kwargs.get('iterations',10000)
         self.risk_free_interest_rate = kwargs.get('risk_free_interest_rate',0)
 
-    def _find_portfolio_risk_and_reward(self,weights):
+    def __find_portfolio_risk_and_reward(self,weights):
         '''
         :param ticker_data:
         :param weights:
@@ -34,7 +34,7 @@ class PortfolioOptimizer():
         portfolio_volatility = np.sqrt(np.dot(weights.T, np.dot(returns.cov()*252, weights)))
         return (portfolio_volatility,expected_portfolio_return)
 
-    def find_efficiency_frontier(self,portfolios):
+    def __find_efficiency_frontier(self,portfolios):
         # Bin all returns into 100 bins
         returns = np.array([portfolio[1] for portfolio in portfolios])
         histogram_bins = np.histogram(returns, bins=100, range=None, normed=None, weights=None, density=None)[1]
@@ -61,13 +61,13 @@ class PortfolioOptimizer():
         # todo: speed this up using multiprocessing.pool
         portfolios = []
         for i, w in enumerate(list_of_weights):
-            portfolios.append(self._find_portfolio_risk_and_reward(w)+(i,))
+            portfolios.append(self.__find_portfolio_risk_and_reward(w)+(i,))
             #count = len(list_of_weights)
             pctDone = round(i/len(list_of_weights)*100)
             print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)', end='\r')
         print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)')
 
-        optimal_portfolios =self.find_efficiency_frontier(portfolios)
+        optimal_portfolios =self.__find_efficiency_frontier(portfolios)
         optimal_returns_and_volatilities = [(p[0],p[1]) for p in optimal_portfolios[0]] # The third is index, so that we ca report back to original
 
         self.opt = pd.DataFrame(list_of_weights, columns=self.tickers)
