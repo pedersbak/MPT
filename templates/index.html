@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+
+    <script>
+        var data = {{data | safe}}
+        console.log(data)
+        const newDiv = document.createElement("div");
+        newDiv.innerHTML='<b>Status: </b>'
+</script>
+</head>
+<body>
+    <div id="my_div">
+        <h1>Portfolio Optimizer</h1>
+        <p>This is the admin page of Portfolio Optimizer</p>
+    </div>
+    <script>
+        console.log(data)
+        function addCode() {
+            var input_fields = ''
+            var url = location.protocol + '//' +location.host + location.pathname;
+            document.getElementById("my_div").innerHTML +="Process is "+data.status;
+              if (data.status == 'running') {
+                document.getElementById("my_div").innerHTML +='<br>'+data.logdata
+                console.log(url)
+                button = '<br><button onClick="window.location.href = \''+url+'\';">Refresh</button>'
+              }
+              else
+              {
+                document.getElementById("my_div").innerHTML+=data.prev_result
+                input_fields += '<form id="myform" action="'+window.location.href+'" method="get">'
+                input_fields += '<br><br><input type="text" name="tickers" value=""> Tickers, comma separated'
+                input_fields += '<br><br><input type="text" name="iterations" value=""> iterations'
+                input_fields += '<br><br><input type="text" name="risk_free_interest" value=""> Risk free interest'
+                input_fields += '<br><br><input type="text" name="start_date" value=""> Start (yyyy/mm/dd)'
+                input_fields += '<br><br><input type="text" name="end_date" value=""> End (yyyy/mm/dd)'
+                input_fields += '<br><br><input type="text" name="number_of_processes" value=""> Number of processes'
+                input_fields += '<br><br><input type="text" name="number_of_chunks" value=""> Number of chunks'
+                input_fields += ' <input type="hidden" id="custId" name="start" value="1">'
+                input_fields += '</form>'
+                button = '<br><br><button type="submit" form="myform" value="Submit">Start process</button>'
+              }
+              document.getElementById("my_div").innerHTML+=input_fields+button
+        }
+        addCode()
+    </script>
+</body>
+</html>

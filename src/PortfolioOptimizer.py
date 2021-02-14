@@ -3,7 +3,9 @@ from pandas_datareader import data
 import numpy as np
 from multiprocessing import Pool
 from datetime import datetime
-import sys
+import argparse, sys
+
+
 class PortfolioOptimizer():
     """
     Class that optimizes a portfolio of assets by applying Modern Portfolio Theory
@@ -21,6 +23,7 @@ class PortfolioOptimizer():
         self.risk_free_interest_rate = kwargs.get('risk_free_interest_rate',0)
         self.number_of_chunks = kwargs.get('number_of_chunks',1)
         self.number_of_processes = kwargs.get('number_of_processes',1)
+        self.verbose = kwargs.get('verbose',0)
 
     def __timedeltaToString(self, td):
         """
@@ -62,7 +65,6 @@ class PortfolioOptimizer():
         optimal_portfolios = []
         optimal_portfolio_indexes = []
         for i, bin in enumerate(set(digitized)):
-            print('Bin {} '.format(i), end='\r')
             filter = [bin == i for i in digitized]
             portfolios_in_bin = np.array(portfolios)[filter]
             best_in_bin = tuple(portfolios_in_bin[np.argmin(portfolios_in_bin[:, 0]), :])
@@ -79,7 +81,6 @@ class PortfolioOptimizer():
         """
         portfolios = []
         for i, w in enumerate(list_of_weights):
-            #print(len(w))
             portfolios.append(self.__find_portfolio_risk_and_reward(w)+(i,))
         return portfolios
 
@@ -92,21 +93,29 @@ class PortfolioOptimizer():
         portfolios = []
         # If no multiprocessing parameters are set, do the work sequentially
         if self.number_of_processes == 1 :
-            print('Working sequentially at {}'.format(len(list_of_weights)))
+            if self.verbose == 1:
+                print('Working sequentially at {} iterations'.format(len(list_of_weights)))
+                print('Tickers: '+str(self.tickers))
             for i, w in enumerate(list_of_weights):
                 portfolios.append(self.__find_portfolio_risk_and_reward(w)+(i,))
                 pctDone = round((i+1)/len(list_of_weights)*100)
-                print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)', end='\r')
-            print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)')
+                if self.verbose == 1:
+                    print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)', end='\r')
+            if self.verbose == 1:
+                print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(i+1)+' iter)')
 
         else:
-            # Split into at least 1 chunk pr process
+            # Split into at least 1 chunk per process
+            print('Splitting into processes')
+            print(self.number_of_chunks)
+            print(self.number_of_processes)
             chunks = np.array_split(np.array(list_of_weights),max(self.number_of_chunks,self.number_of_processes))
             pool = Pool(self.number_of_processes)
             start_time = datetime.now()
             count = 0
             pctDone = 0
-            print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations)', end='\r')
+            if self.verbose == 1:
+                print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations)', end='\r')
 
             for i, result in enumerate(pool.imap(self.worker,chunks)):
                 portfolios.extend(result)
@@ -114,8 +123,10 @@ class PortfolioOptimizer():
                 pctDone = round((i+1)/(self.number_of_chunks)*100)
                 elapsed_time = self.__timedeltaToString(datetime.now()-start_time) # Custom object for formatting timedelta
                 estimated_time_left = self.__timedeltaToString((datetime.now()-start_time)/(i+1)*len(chunks))
-                print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations) Elapsed time: '+str(elapsed_time) + ' Estimated total time: '+estimated_time_left, end='\r')
-            print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations) Elapsed time: '+str(elapsed_time) + ' Estimated total time: '+estimated_time_left, end='\n')
+                if self.verbose == 1:
+                    print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations) Elapsed time: '+str(elapsed_time) + ' Estimated total time: '+estimated_time_left, end='\r')
+            if self.verbose == 1:
+                print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations) Elapsed time: '+str(elapsed_time) + ' Estimated total time: '+estimated_time_left, end='\n')
 
 
         optimal_portfolios =self.__find_efficiency_frontier(portfolios)
@@ -129,15 +140,45 @@ class PortfolioOptimizer():
         return True
 
 if __name__ == '__main__':
+    import argparse, sys
+    if False:#For test
+        args = {}
+        args['tickers'] = ['TSLA','TLT','GLD','SPY','QQQ','VWO','IUSR.DE','SXRW.DE', 'TDC']
+        args['iterations']=10000
+        args['risk_free_interest'] = -0.075
+        args['start'] = '2019/01/01'
+        args['end'] = '2020/12/31'
+        args['number_of_chunks'] = 200
+        args['number_of_processes'] = 2
+        args['verbose']=1
+    else:
+        parser=argparse.ArgumentParser()
+        parser.add_argument('--tickers', help='tickers')
+        parser.add_argument('--iterations', help='iterations')
+        parser.add_argument('--risk_free_interest', help='risk free interest')
+        parser.add_argument('--start_date', help='start date')
+        parser.add_argument('--end_date', help='end date')
+        parser.add_argument('--verbose', help='verbose')
 
-    tickers = ['TSLA','TLT','GLD','SPY','QQQ','VWO','IUSR.DE','SXRW.DE','TDC']
-    my_portfolio_optimizer = PortfolioOptimizer(tickers=tickers,
-                                                iterations=300000,
-                                                risk_free_interest = -0.075,
-                                                start = '2018/01/01',
-                                                end = '2020/12/31',
-                                                number_of_chunks = 1000,
-                                                number_of_processes = 4)
+        parser.add_argument('--number_of_processes', help='number of processes')
+        parser.add_argument('--number_of_chunks', help='number of chunks')
+
+        args=parser.parse_args()
+        if args.tickers:
+            args.tickers = args.tickers.split(',')
+        if args.iterations:
+            args.iterations = int(args.iterations)
+        if args.verbose:
+            args.verbose = int(args.verbose)
+        if args.number_of_processes:
+            args.number_of_processes = int(args.number_of_processes)
+        if args.number_of_chunks:
+            args.number_of_chunks = int(args.number_of_chunks)
+
+        print(vars(args))
+        args = vars(args)
+
+    my_portfolio_optimizer = PortfolioOptimizer(**args)
+
     my_portfolio_optimizer.optimize()
-
-    print(my_portfolio_optimizer.sharpe_optimal)
+    print(my_portfolio_optimizer.sharpe_optimal.to_dict('r')[0])
