@@ -1,0 +1,34 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[[source]]
+url = "https://__TOKEN__:$GITLAB_PIPY_PASS@gitlab.com/api/v4/projects/23226724/packages/pypi/simple"
+verify_ssl = true
+name = "gitlab"
+
+[packages]
+structlog = "*"
+prometheus-client = "*"
+healthcheckserver = "*"
+easysettings = "*"
+pyodbc = "*"
+portalocker = "*"
+pandas = "*"
+numpy = "*"
+pytest = "*"
+marketdata-metadataenricher = "*"
+pymsteams = "*"
+python-dateutil = "*"
+pytz = "*"
+quantstats = "*"
+pika = "*"
+pandas-datareader = "*"
+yfinance = "==0.1.62"
+
+[dev-packages]
+pytest = "*"
+
+[requires]
+python_version = "3.8"

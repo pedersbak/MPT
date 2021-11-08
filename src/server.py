@@ -81,7 +81,7 @@ def startProcess():
 
     # Defining log
     log = open('../log/output.log', "w")
-    command = ['python3.8','-u', './PortfolioOptimizer.py','--verbose=1']
+    command = ['python','-u', './PortfolioOptimizer.py','--verbose=1']
     command.extend(parameters)
 
     p = Popen(command, stdout=log)

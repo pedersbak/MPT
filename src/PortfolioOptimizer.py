@@ -3,7 +3,9 @@ from pandas_datareader import data
 import numpy as np
 from multiprocessing import Pool
 from datetime import datetime
+import yfinance as yf
 import argparse, sys
+import itertools
 
 
 class PortfolioOptimizer():
@@ -13,11 +15,27 @@ class PortfolioOptimizer():
 
     def __init__(self, **kwargs):
         self.tickers = kwargs.get('tickers',[])
-        self.start = kwargs.get('start','2017/01/01')
-        self.end = kwargs.get('end','2020/12/31')
+        self.start = kwargs['start']
+        self.end = kwargs['end']
+        self.mode = kwargs.get('mode','sp500')
 
-        self.ticker_data = data.DataReader(self.tickers, 'yahoo', start=self.start, end=self.end)['Adj Close']
-        self.ticker_data=self.ticker_data.fillna(method='backfill')
+        if self.mode != 'sp500':
+            assert len(kwargs.get('tickers',[])) > 0, 'Tickers argument empty list or None'
+            self.ticker_data = data.DataReader(self.tickers, 'yahoo', start=self.start.strftime('%Y/%m/%d'), end=self.end.strftime('%Y/%m/%d'))['Adj Close']
+            self.ticker_data=self.ticker_data.fillna(method='backfill')
+        else:
+            self.df = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', attrs={'id': 'constituents'})
+            self.ticker_data = yf.download(" ".join(self.df[0]['Symbol']), start=self.start.strftime('%Y-%m-%d'), end=self.end.strftime('%Y-%m-%d'))['Adj Close']
+
+        #self.expected_yearly_returns = self.ticker_data.resample('Y').last().pct_change().mean()
+        self.expected_yearly_returns = self.ticker_data.iloc[[0, -1]].pct_change().mean()
+
+
+        self.expected_yearly_returns_df = pd.DataFrame(self.expected_yearly_returns)
+        self.expected_yearly_returns_df.columns = ['expected_yearly_return']
+        self.expected_yearly_returns_df = self.df[0].set_index('Symbol').join(self.expected_yearly_returns_df)
+        self.symbols = (self.expected_yearly_returns_df.groupby("GICS Sector")['expected_yearly_return'].nlargest(1).reset_index())['Symbol']
+        self.ticker_data = self.ticker_data[self.symbols]
         self.ticker_data = self.ticker_data.dropna(axis=1, how='all')
         self.iterations = kwargs.get('iterations',10000)
         self.risk_free_interest_rate = kwargs.get('risk_free_interest_rate',0)
@@ -44,8 +62,9 @@ class PortfolioOptimizer():
         :param weights:
         :return: volatilities and expected returns on portfolios
         '''
-        expected_yearly_returns = self.ticker_data.resample('Y').last().pct_change().mean()
-        expected_portfolio_return = (weights*expected_yearly_returns).sum()
+
+
+        expected_portfolio_return = (list(weights)*self.expected_yearly_returns.loc[self.symbols]).sum()
         for i, symbol in enumerate(self.ticker_data.columns):
             if i == 0:
                 returns = pd.DataFrame(self.ticker_data[symbol].pct_change().apply(lambda x: np.log(1+x)))
@@ -86,9 +105,14 @@ class PortfolioOptimizer():
 
     def optimize(self):
         list_of_weights = []
-        for i in range(self.iterations):
-            weights = np.random.dirichlet(np.ones(len(self.tickers)), size=1)[0]
-            list_of_weights.append(weights)
+        #for i in range(self.iterations):
+        #    weights = np.random.dirichlet(np.ones(len(self.tickers)), size=1)[0]
+        #    list_of_weights.append(weights)
+
+        numbers = [0, .05, .1, .15, .2, .25, .3, .35, .4, .45, .5]
+        list_of_weights = [np.array(seq) for i in range(len(self.symbols), 0, -1) for seq in
+                           itertools.combinations_with_replacement(numbers, i)
+                           if (sum(seq) == 1) and (len(seq) == len(self.symbols))]
 
         portfolios = []
         # If no multiprocessing parameters are set, do the work sequentially
@@ -129,11 +153,11 @@ class PortfolioOptimizer():
                 print('|'+'*'*pctDone+' '*(100-pctDone)+'|'+str(pctDone)+'%'+' ('+str(count)+' iterations) Elapsed time: '+str(elapsed_time) + ' Estimated total time: '+estimated_time_left, end='\n')
 
 
-        optimal_portfolios =self.__find_efficiency_frontier(portfolios)
-        optimal_returns_and_volatilities = [(p[0],p[1]) for p in optimal_portfolios[0]] # The third is index, so that we ca report back to original
+        self.optimal_portfolios =self.__find_efficiency_frontier(portfolios)
+        self.optimal_returns_and_volatilities = [(p[0],p[1]) for p in self.optimal_portfolios[0]] # The third is index, so that we ca report back to original
 
         self.opt = pd.DataFrame(list_of_weights, columns=self.tickers)
-        self.opt = self.opt.merge(pd.DataFrame(optimal_returns_and_volatilities, columns=['volatility','return']), left_index=True, right_index=True)
+        self.opt = self.opt.merge(pd.DataFrame(self.optimal_returns_and_volatilities, columns=['volatility','return']), left_index=True, right_index=True)
 
         self.opt['sharpe'] = (self.opt['return']-(self.risk_free_interest_rate))/self.opt['volatility']
         self.sharpe_optimal = self.opt.iloc[[self.opt['sharpe'].argmax()]]
@@ -141,7 +165,7 @@ class PortfolioOptimizer():
 
 if __name__ == '__main__':
     import argparse, sys
-    if False:#For test
+    if True:#For test
         args = {}
         args['tickers'] = ['TSLA','TLT','GLD','SPY','QQQ','VWO','IUSR.DE','SXRW.DE', 'TDC']
         args['iterations']=10000
@@ -178,7 +202,8 @@ if __name__ == '__main__':
         print(vars(args))
         args = vars(args)
 
-    my_portfolio_optimizer = PortfolioOptimizer(**args)
+    #my_portfolio_optimizer = PortfolioOptimizer(**args)
+    my_portfolio_optimizer = PortfolioOptimizer(mode='sp500')
 
     my_portfolio_optimizer.optimize()
-    print(my_portfolio_optimizer.sharpe_optimal.to_dict('r')[0])
+    print(my_portfolio_optimizer.sharpe_optimal.to_dict('records')[0])
